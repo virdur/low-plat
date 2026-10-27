@@ -21,6 +21,7 @@
   var hud = document.getElementById('hud');
   var fpsInput = document.getElementById('fps');
   var fpsLabel = document.getElementById('fpslabel');
+  var fpsNum = document.getElementById('fpsnum');
 
   var levels = [];
   var i;
@@ -164,6 +165,10 @@
 
   window.addEventListener('keydown', function (e) {
     var c = e.code;
+    if (e.target === fpsNum) {              // печатаем число: игровые клавиши не трогаем
+      if (c === 'Enter' || c === 'NumpadEnter' || c === 'Escape') fpsNum.blur();
+      return;
+    }
     if (KEY_L[c] || KEY_R[c] || KEY_J[c] || c === 'KeyR' || c === 'BracketLeft' || c === 'BracketRight') e.preventDefault();
     if (e.repeat) return;
     keys[c] = true;
@@ -255,18 +260,39 @@
   } catch (e) {}
 
   function updateFpsLabel() {
-    var txt = 'FPS: ' + (fpsNow || '…') + ' / лимит ' + fpsCap;
+    var txt = 'FPS: ' + (fpsNow || '…') + ' · лимит';
     if (fpsLabel.textContent !== txt) fpsLabel.textContent = txt;
   }
 
-  fpsInput.min = FPS_MIN; fpsInput.max = FPS_MAX; fpsInput.step = 1; fpsInput.value = fpsCap;
-  fpsInput.addEventListener('input', function () {
-    fpsCap = Math.max(FPS_MIN, Math.min(FPS_MAX, parseInt(fpsInput.value, 10) || 60));
+  function clampFps(v) { return Math.max(FPS_MIN, Math.min(FPS_MAX, v)); }
+
+  function setFpsCap(v) {
+    if (v === fpsCap) return;
+    fpsCap = v;
     try { localStorage.setItem('lowplat.fps', String(fpsCap)); } catch (e) {}
     nextRender = 0; fpsCount = 0; fpsStamp = 0; fpsNow = 0;
     updateFpsLabel();
+  }
+
+  fpsInput.min = FPS_MIN; fpsInput.max = FPS_MAX; fpsInput.step = 1; fpsInput.value = fpsCap;
+  fpsNum.min = FPS_MIN; fpsNum.max = FPS_MAX; fpsNum.step = 1; fpsNum.value = fpsCap;
+
+  fpsInput.addEventListener('input', function () {
+    var v = clampFps(parseInt(fpsInput.value, 10) || 60);
+    fpsNum.value = v;
+    setFpsCap(v);
   });
-  // после выбора снимаем фокус, чтобы стрелки и пробел управляли игрой, а не ползунком
+  // число вручную: пока печатаешь, подходящее значение применяется сразу, остальное поправится, когда закончишь
+  fpsNum.addEventListener('input', function () {
+    var v = parseInt(fpsNum.value, 10);
+    if (v >= FPS_MIN && v <= FPS_MAX) { fpsInput.value = v; setFpsCap(v); }
+  });
+  fpsNum.addEventListener('change', function () {
+    var v = clampFps(parseInt(fpsNum.value, 10) || fpsCap);   // пусто или мусор -> прежнее значение, вне границ -> ближайшая граница
+    fpsNum.value = v; fpsInput.value = v;
+    setFpsCap(v);
+  });
+  // после выбора снимаем фокус с ползунка, чтобы стрелки и пробел управляли игрой, а не им
   fpsInput.addEventListener('change', function () { fpsInput.blur(); });
   fpsInput.addEventListener('pointerup', function () { fpsInput.blur(); });
 
