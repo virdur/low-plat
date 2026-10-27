@@ -15,7 +15,7 @@
 <body>
 <div id="hud"></div>
 <canvas id="c"></canvas>
-<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок · зажми в сторону стены — держишься и медленно скользишь · прыжок со стены — отскок · R — заново · [ ] — уровень</div>
+<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок: чем дольше держишь, тем выше (со стены тоже) · зажми в сторону стены — держишься и медленно скользишь · R — заново · [ ] — уровень</div>
 <script>
 /* Физика и разбор уровней. Никакого DOM: тот же код гоняет tools/solve.js в Node. */
 (function (root) {
@@ -36,10 +36,15 @@
     fric: 0.6,
     airDrag: 0.12,
     maxRun: 3.2,
-    jump: 7.6,
-    cut: 2.5,          // отпустил прыжок рано -> вверх не быстрее этого
-    wallJX: 4.2,
-    wallJY: 7.2,
+    // высота прыжка зависит от того, сколько держишь кнопку: стартовая скорость
+    // jump, потом пока кнопка зажата (до jumpFrames кадров) к ней добавляется jumpBoost за кадр
+    jump: 3.0,
+    jumpBoost: 0.62,
+    jumpFrames: 10,
+    wallJX: 4.2,       // от стены - всегда одинаково, высота - как у обычного прыжка
+    wallJump: 3.0,
+    wallBoost: 0.62,
+    wallFrames: 10,
     wallLock: 9,       // кадров без управления после отскока от стены
     coyote: 6,
     wallCoyote: 5,
@@ -80,20 +85,20 @@
 
   function newState() {
     return { x: 0, y: 0, vx: 0, vy: 0, g: false, jh: false, buf: 0, coyote: 0,
-             wallT: 0, wallSide: 0, lock: 0, grip: 0, dead: false, won: false };
+             wallT: 0, wallSide: 0, lock: 0, grip: 0, jt: 0, jb: 0, dead: false, won: false };
   }
 
   function reset(s, lv) {
     s.x = lv.sx; s.y = lv.sy; s.vx = 0; s.vy = 0;
     s.g = false; s.jh = false; s.buf = 0; s.coyote = 0;
-    s.wallT = 0; s.wallSide = 0; s.lock = 0; s.grip = 0;
+    s.wallT = 0; s.wallSide = 0; s.lock = 0; s.grip = 0; s.jt = 0; s.jb = 0;
     s.dead = false; s.won = false;
   }
 
   function copyState(a, b) {
     b.x = a.x; b.y = a.y; b.vx = a.vx; b.vy = a.vy; b.g = a.g; b.jh = a.jh;
     b.buf = a.buf; b.coyote = a.coyote; b.wallT = a.wallT; b.wallSide = a.wallSide;
-    b.lock = a.lock; b.grip = a.grip; b.dead = a.dead; b.won = a.won;
+    b.lock = a.lock; b.grip = a.grip; b.jt = a.jt; b.jb = a.jb; b.dead = a.dead; b.won = a.won;
   }
 
   // Бокс (x,y,SIZE) пересекает твёрдый тайл? Всё за краем поля - стена.
@@ -165,13 +170,17 @@
     if (s.g) s.coyote = C.coyote; else if (s.coyote > 0) s.coyote--;
     if (s.buf > 0) {
       if (s.coyote > 0) {
-        s.vy = -C.jump; s.coyote = 0; s.buf = 0; s.g = false;
+        s.vy = -C.jump; s.jt = C.jumpFrames; s.jb = C.jumpBoost;
+        s.coyote = 0; s.buf = 0; s.g = false;
       } else if (s.wallT > 0) {
-        s.vy = -C.wallJY; s.vx = -s.wallSide * C.wallJX;
+        s.vy = -C.wallJump; s.jt = C.wallFrames; s.jb = C.wallBoost;
+        s.vx = -s.wallSide * C.wallJX;
         s.lock = C.wallLock; s.wallT = 0; s.buf = 0; s.grip = 0;
       }
     }
-    if (!jh && s.vy < -C.cut) s.vy = -C.cut;
+    if (s.jt > 0) {
+      if (jh) { s.vy -= s.jb; s.jt--; } else s.jt = 0;
+    }
 
     // гравитация; на стене с нажатием "в стену" падаем медленно
     s.vy += C.grav;
@@ -191,7 +200,7 @@
     s.g = false;
     if (hitsSolid(lv, s.x, ny)) {
       if (s.vy > 0) { ny = Math.floor((ny + SIZE - 0.001) / T) * T - SIZE; s.g = true; }
-      else ny = (Math.floor(ny / T) + 1) * T;
+      else { ny = (Math.floor(ny / T) + 1) * T; s.jt = 0; }
       s.vy = 0;
     }
     s.y = ny;
@@ -280,6 +289,75 @@
         ['^', 16, 9, 1, 2],
         ['^', 14, 6, 1, 2],
         ['^', 16, 4, 1, 1]
+      ]
+    },
+    {
+      name: 'Низкий потолок',
+      start: [2, 15], exit: [29, 15],
+      ops: [
+        ['#', 1, 16, 30, 1],
+        ['#', 5, 2, 22, 11],
+        ['^', 5, 13, 22, 1],
+        ['^', 9, 15, 2, 1],
+        ['^', 14, 15, 3, 1],
+        ['^', 20, 15, 3, 1]
+      ]
+    },
+    {
+      name: 'Эстафета',
+      start: [16, 15], exit: [14, 1],
+      ops: [
+        ['#', 1, 16, 30, 1],
+        ['#', 1, 1, 13, 15],
+        ['#', 18, 1, 13, 15],
+        ['#', 14, 14, 2, 1], ['^', 14, 15, 2, 1],
+        ['#', 16, 11, 2, 1], ['^', 16, 12, 2, 1],
+        ['#', 14, 8, 2, 1],  ['^', 14, 9, 2, 1],
+        ['#', 16, 5, 2, 1],  ['^', 16, 6, 2, 1],
+        ['#', 14, 2, 2, 1],  ['^', 14, 3, 2, 1]
+      ]
+    },
+    {
+      name: 'Тесный колодец',
+      start: [16, 15], exit: [24, 2],
+      ops: [
+        ['#', 1, 16, 30, 1],
+        ['#', 1, 3, 14, 13],
+        ['#', 17, 3, 14, 13],
+        ['^', 15, 13, 1, 2],
+        ['^', 16, 9, 1, 2],
+        ['^', 15, 5, 1, 2]
+      ]
+    },
+    {
+      name: 'Столбики',
+      start: [2, 11], exit: [29, 11],
+      ops: [
+        ['#', 1, 16, 30, 1],
+        ['^', 4, 15, 24, 1],
+        ['#', 1, 12, 3, 4],
+        ['#', 28, 12, 3, 4],
+        ['#', 7, 13, 1, 3],
+        ['#', 11, 11, 1, 5],
+        ['#', 15, 14, 1, 2],
+        ['#', 19, 10, 1, 6],
+        ['#', 23, 13, 1, 3],
+        ['#', 4, 2, 24, 4],
+        ['^', 4, 6, 24, 1]
+      ]
+    },
+    {
+      name: 'Гонка со стенами',
+      start: [2, 15], exit: [8, 2],
+      ops: [
+        ['#', 1, 16, 30, 1],
+        ['#', 1, 3, 14, 10],
+        ['^', 1, 13, 14, 1],
+        ['^', 8, 15, 2, 1],
+        ['^', 12, 15, 2, 1],
+        ['#', 19, 3, 12, 13],
+        ['#', 15, 9, 2, 1], ['^', 15, 10, 2, 1],
+        ['#', 17, 5, 2, 1], ['^', 17, 6, 2, 1]
       ]
     }
   ];

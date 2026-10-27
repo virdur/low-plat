@@ -1,4 +1,5 @@
-/* Проверка проходимости уровней: node tools/solve.js [номер уровня] [--map]
+/* Проверка проходимости уровней: node tools/solve.js [номер уровня] [--map] [--skip=N]
+   --skip=N: решение с вводом, меняющимся не чаще раза в N кадров (чем больше N и всё ещё ok, тем снисходительнее уровень)
    BFS по настоящей физике из src/sim.js. Найден путь -> уровень точно проходим.
    Не найден -> неубедительно (ключ состояния квантуется), но повод присмотреться. */
 'use strict';
@@ -6,14 +7,15 @@ require('../src/sim.js');
 require('../src/levels.js');
 var LP = globalThis.LP, sim = LP.sim;
 
-var SKIP = 3;
+var SKIP = 4;
+process.argv.forEach(function (a) { var m = /^--skip=(\d+)$/.exec(a); if (m) SKIP = parseInt(m[1], 10); });
 var ACTIONS = [0, 1, 2, 4, 5, 6]; // ничего, влево, вправо, прыжок, влево+прыжок, вправо+прыжок
-var MAX_NODES = 4e6;
+var MAX_NODES = 6e6;
 
 function key(s) {
-  return [Math.round(s.x / 2), Math.round(s.y / 2), Math.round(s.vx * 2), Math.round(s.vy * 2),
+  return [Math.round(s.x / 3), Math.round(s.y / 3), Math.round(s.vx), Math.round(s.vy),
           s.g ? 1 : 0, s.jh ? 1 : 0, s.coyote > 0 ? 1 : 0, s.wallT > 0 ? s.wallSide : 0, s.lock > 0 ? 1 : 0,
-          s.buf > 0 ? 1 : 0].join(',');
+          s.buf > 0 ? 1 : 0, s.jt > 0 ? 1 + (s.jt >> 2) : 0].join(',');
 }
 
 function solve(lv) {
@@ -63,7 +65,7 @@ function ascii(lv) {
 }
 
 var arg = process.argv[2];
-var only = arg && arg !== '--map' ? parseInt(arg, 10) - 1 : -1;
+var only = arg && /^\d+$/.test(arg) ? parseInt(arg, 10) - 1 : -1;
 var map = process.argv.indexOf('--map') >= 0;
 var failed = 0;
 LP.levelDefs.forEach(function (def, i) {
