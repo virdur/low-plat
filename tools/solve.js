@@ -14,8 +14,8 @@ var MAX_NODES = 6e6;
 
 function key(s) {
   return [Math.round(s.x / 3), Math.round(s.y / 3), Math.round(s.vx), Math.round(s.vy),
-          s.g ? 1 : 0, s.jh ? 1 : 0, s.coyote > 0 ? 1 : 0, s.wallT > 0 ? s.wallSide : 0, s.lock > 0 ? 1 : 0,
-          s.buf > 0 ? 1 : 0, s.jt > 0 ? 1 + (s.jt >> 2) : 0].join(',');
+          s.g ? 1 : 0, s.jh ? 1 : 0, s.coyote > 0 ? 1 : 0, s.wallT > 0 ? s.wallSide : 0,
+          s.buf > 0 ? 1 : 0, s.jt > 0 ? 1 + (s.jt >> 2) : 0, s.jx > 0 ? 1 : s.jx < 0 ? -1 : 0].join(',');
 }
 
 function solve(lv) {

@@ -22,11 +22,14 @@
     jump: 3.0,
     jumpBoost: 0.62,
     jumpFrames: 10,
-    wallJX: 4.2,       // от стены - всегда одинаково, высота - как у обычного прыжка
+    // отскок от стены растёт с удержанием так же, как обычный прыжок: короткий тап -
+    // слабый подпрыг, на нём можно карабкаться вдоль стены; полное удержание -
+    // сильный отскок (по горизонтали wallJX + wallFrames * wallBoostX = 4.2, как раньше)
     wallJump: 3.0,
     wallBoost: 0.62,
+    wallJX: 1.2,
+    wallBoostX: 0.3,
     wallFrames: 10,
-    wallLock: 9,       // кадров без управления после отскока от стены
     coyote: 6,
     wallCoyote: 5,
     buffer: 6
@@ -66,20 +69,20 @@
 
   function newState() {
     return { x: 0, y: 0, vx: 0, vy: 0, g: false, jh: false, buf: 0, coyote: 0,
-             wallT: 0, wallSide: 0, lock: 0, grip: 0, jt: 0, jb: 0, dead: false, won: false };
+             wallT: 0, wallSide: 0, grip: 0, jt: 0, jb: 0, jx: 0, dead: false, won: false };
   }
 
   function reset(s, lv) {
     s.x = lv.sx; s.y = lv.sy; s.vx = 0; s.vy = 0;
     s.g = false; s.jh = false; s.buf = 0; s.coyote = 0;
-    s.wallT = 0; s.wallSide = 0; s.lock = 0; s.grip = 0; s.jt = 0; s.jb = 0;
+    s.wallT = 0; s.wallSide = 0; s.grip = 0; s.jt = 0; s.jb = 0; s.jx = 0;
     s.dead = false; s.won = false;
   }
 
   function copyState(a, b) {
     b.x = a.x; b.y = a.y; b.vx = a.vx; b.vy = a.vy; b.g = a.g; b.jh = a.jh;
     b.buf = a.buf; b.coyote = a.coyote; b.wallT = a.wallT; b.wallSide = a.wallSide;
-    b.lock = a.lock; b.grip = a.grip; b.jt = a.jt; b.jb = a.jb; b.dead = a.dead; b.won = a.won;
+    b.grip = a.grip; b.jt = a.jt; b.jb = a.jb; b.jx = a.jx; b.dead = a.dead; b.won = a.won;
   }
 
   // Бокс (x,y,SIZE) пересекает твёрдый тайл? Всё за краем поля - стена.
@@ -139,10 +142,8 @@
       s.wallT = 0;
     }
 
-    // бег
-    if (s.lock > 0) {
-      s.lock--;
-    } else {
+    // бег; пока держишь прыжок после отскока от стены, куб летит по инерции отскока
+    if (!(s.jx !== 0 && s.jt > 0 && jh)) {
       var a = dir === 0 ? (s.g ? C.fric : C.airDrag) : (s.g ? C.accel : C.airAccel);
       s.vx = approach(s.vx, dir * C.maxRun, a);
     }
@@ -151,16 +152,16 @@
     if (s.g) s.coyote = C.coyote; else if (s.coyote > 0) s.coyote--;
     if (s.buf > 0) {
       if (s.coyote > 0) {
-        s.vy = -C.jump; s.jt = C.jumpFrames; s.jb = C.jumpBoost;
+        s.vy = -C.jump; s.jt = C.jumpFrames; s.jb = C.jumpBoost; s.jx = 0;
         s.coyote = 0; s.buf = 0; s.g = false;
       } else if (s.wallT > 0) {
         s.vy = -C.wallJump; s.jt = C.wallFrames; s.jb = C.wallBoost;
-        s.vx = -s.wallSide * C.wallJX;
-        s.lock = C.wallLock; s.wallT = 0; s.buf = 0; s.grip = 0;
+        s.vx = -s.wallSide * C.wallJX; s.jx = -s.wallSide * C.wallBoostX;
+        s.wallT = 0; s.buf = 0; s.grip = 0;
       }
     }
     if (s.jt > 0) {
-      if (jh) { s.vy -= s.jb; s.jt--; } else s.jt = 0;
+      if (jh) { s.vy -= s.jb; s.vx += s.jx; s.jt--; } else s.jt = 0;
     }
 
     // гравитация; на стене с нажатием "в стену" падаем медленно
