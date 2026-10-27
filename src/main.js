@@ -1,7 +1,8 @@
 /* Отрисовка, ввод, игровой цикл. Рассчитано на слабые машины:
    - уровень один раз рисуется в offscreen-канвас, в кадре перерисовывается только область вокруг куба;
    - фиксированный шаг 60 Гц, при тормозах игра замедляется, а не копит очередь;
-   - нет аллокаций в цикле, нет DOM-записей в кадре (HUD обновляется раз в секунду);
+   - нет аллокаций в цикле, DOM пишется только при смене текста (раз в секунду);
+   - лимит частоты отрисовки 60/30 (клавиша F или кнопка): физика всегда 60 Гц, режется только рисование;
    - вкладка в фоне -> цикл стоит. */
 (function () {
   'use strict';
@@ -9,12 +10,14 @@
   var LP = window.LP, sim = LP.sim;
   var T = sim.T, W = sim.COLS * T, H = sim.ROWS * T, SIZE = sim.SIZE;
 
-  var COLORS = { bg: '#14161c', wall: '#3a4054', spike: '#e5484d', exit: '#3dd68c', cube: '#ffc53d', cubeDark: '#b88a12' };
+  var COLORS = { bg: '#14161c', wall: '#3a4054', spike: '#e5484d', exit: '#3dd68c', pole: '#cfd3dc', cube: '#ffc53d', cubeDark: '#b88a12' };
+  var HALF_PI = Math.PI / 2, TWO_PI = Math.PI * 2;
 
   var canvas = document.getElementById('c');
   canvas.width = W; canvas.height = H;
   var ctx = canvas.getContext('2d', { alpha: false });
   var hud = document.getElementById('hud');
+  var fpsBtn = document.getElementById('fps');
 
   var levels = [];
   var i;
@@ -76,10 +79,17 @@
         if (lv.grid[y * sim.COLS + x] === sim.SPIKE) drawSpike(lv, x, y);
       }
     }
-    cctx.fillStyle = COLORS.exit;               // выход: рамка + точка
-    cctx.fillRect(lv.ex * T + 2, lv.ey * T + 2, T - 4, T - 4);
-    cctx.fillStyle = COLORS.bg;
-    cctx.fillRect(lv.ex * T + 5, lv.ey * T + 5, T - 10, T - 10);
+    // финиш: флажок на древке, основание на низу клетки
+    var fx = lv.ex * T, fy = lv.ey * T;
+    cctx.fillStyle = COLORS.pole;
+    cctx.fillRect(fx + 6, fy + 1, 2, T - 1);
+    cctx.fillRect(fx + 4, fy + T - 2, 6, 2);
+    cctx.fillStyle = COLORS.exit;
+    cctx.beginPath();
+    cctx.moveTo(fx + 8, fy + 2);
+    cctx.lineTo(fx + 17, fy + 6);
+    cctx.lineTo(fx + 8, fy + 10);
+    cctx.fill();
   }
 
   // ---------- состояние игры ----------
@@ -93,6 +103,10 @@
   var needFull = true;    // перерисовать всё
   var lastRect = { x: 0, y: 0, w: 0, h: 0 };
   var lastHud = '';
+
+  // поворот куба: только для вида, на физику не влияет
+  var ang = 0, face = 1;
+  var SPIN = 0.1;         // рад/такт в воздухе
 
   var NP = 14;
   var ppx = new Float32Array(NP), ppy = new Float32Array(NP), pvx = new Float32Array(NP), pvy = new Float32Array(NP);
@@ -110,6 +124,7 @@
   function restart() {
     sim.reset(P, lv);
     mode = 0; pLife = 0; needFull = true;
+    ang = 0; face = 1;
   }
 
   function burst() {
@@ -145,7 +160,8 @@
     if (KEY_L[c] || KEY_R[c] || KEY_J[c] || c === 'KeyR' || c === 'BracketLeft' || c === 'BracketRight') e.preventDefault();
     if (e.repeat) return;
     keys[c] = true;
-    if (c === 'KeyR' && mode === 0) restart();
+    if (c === 'KeyF') toggleFps();
+    else if (c === 'KeyR' && mode === 0) restart();
     else if (c === 'BracketLeft') loadLevel(levelIdx - 1);
     else if (c === 'BracketRight') loadLevel(levelIdx + 1);
   });
@@ -158,6 +174,10 @@
     if (mode === 0) {
       sim.step(P, lv, inputBits());
       ticks++;
+      if (P.vx > 0.3) face = 1; else if (P.vx < -0.3) face = -1;
+      if (!P.g && !P.grip) ang += face * SPIN;                  // в воздухе крутится
+      else ang += (Math.round(ang / HALF_PI) * HALF_PI - ang) * 0.35; // на земле и на стене встаёт ровно
+      if (ang > TWO_PI) ang -= TWO_PI; else if (ang < -TWO_PI) ang += TWO_PI;
       if (P.dead) { deaths++; burst(); mode = 1; modeT = 36; }
       else if (P.won) { mode = 2; modeT = 40; }
     } else if (mode === 1) {
@@ -186,12 +206,23 @@
       return;
     }
     x = Math.round(P.x); y = Math.round(P.y);
-    ctx.fillStyle = COLORS.cubeDark;
-    ctx.fillRect(x, y, SIZE, SIZE);
-    ctx.fillStyle = COLORS.cube;
-    ctx.fillRect(x + 2, y + 2, SIZE - 4, SIZE - 4);
-    rx = Math.max(0, x - 2); ry = Math.max(0, y - 2);
-    rw = Math.min(W - rx, SIZE + 4); rh = Math.min(H - ry, SIZE + 4);
+    if (Math.abs(ang - Math.round(ang / HALF_PI) * HALF_PI) < 0.02) {   // ровный куб: быстрый путь без сглаживания
+      ctx.fillStyle = COLORS.cubeDark;
+      ctx.fillRect(x, y, SIZE, SIZE);
+      ctx.fillStyle = COLORS.cube;
+      ctx.fillRect(x + 2, y + 2, SIZE - 4, SIZE - 4);
+    } else {
+      var c = Math.cos(ang), s = Math.sin(ang), h = SIZE / 2;
+      ctx.setTransform(c, s, -s, c, x + h, y + h);
+      ctx.fillStyle = COLORS.cubeDark;
+      ctx.fillRect(-h, -h, SIZE, SIZE);
+      ctx.fillStyle = COLORS.cube;
+      ctx.fillRect(-h + 2, -h + 2, SIZE - 4, SIZE - 4);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
+    // повёрнутый куб выступает за свой бокс на ~3 px: запас с каждой стороны 5 px
+    rx = Math.max(0, x - 5); ry = Math.max(0, y - 5);
+    rw = Math.min(W - rx, SIZE + 10); rh = Math.min(H - ry, SIZE + 10);
     lastRect.x = rx; lastRect.y = ry; lastRect.w = rw; lastRect.h = rh;
   }
 
@@ -200,6 +231,24 @@
     var txt = 'Уровень ' + (levelIdx + 1) + '/' + levels.length + ' · ' + lv.name + ' · смертей: ' + deaths + ' · ' + s + ' с';
     if (txt !== lastHud) { hud.textContent = txt; lastHud = txt; }
   }
+
+  // ---------- лимит FPS ----------
+  var fpsCap = 60, fpsNow = 0, fpsCount = 0, fpsStamp = 0, lastRender = 0, ticked = false;
+  try { if (localStorage.getItem('lowplat.fps') === '30') fpsCap = 30; } catch (e) {}
+
+  function updateFpsBtn() {
+    var txt = 'FPS: ' + (fpsNow || fpsCap) + ' (лимит ' + fpsCap + ')';
+    if (fpsBtn.textContent !== txt) fpsBtn.textContent = txt;
+  }
+
+  function toggleFps() {
+    fpsCap = fpsCap === 60 ? 30 : 60;
+    try { localStorage.setItem('lowplat.fps', String(fpsCap)); } catch (e) {}
+    fpsCount = 0; fpsStamp = 0; fpsNow = 0;
+    updateFpsBtn();
+  }
+
+  fpsBtn.addEventListener('click', function () { toggleFps(); fpsBtn.blur(); }); // blur: чтобы пробел не нажимал кнопку
 
   // ---------- цикл ----------
   var STEP = 1000 / 60, acc = 0, last = 0, raf = 0;
@@ -214,7 +263,18 @@
     var n = 0;
     while (acc >= STEP && n < 4) { tick(); acc -= STEP; n++; }
     if (n === 4) acc = 0;
-    if (n > 0) { render(); updateHud(); }
+    if (n > 0) ticked = true;
+    if (ticked && now - lastRender >= 1000 / fpsCap - 4) {  // 4 мс запас на дрожание кадров
+      lastRender = now; ticked = false;
+      render(); updateHud();
+      fpsCount++;
+    }
+    if (!fpsStamp) fpsStamp = now;
+    else if (now - fpsStamp >= 1000) {
+      fpsNow = Math.round(fpsCount * 1000 / (now - fpsStamp));
+      fpsCount = 0; fpsStamp = now;
+      updateFpsBtn();
+    }
   }
 
   function start() { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } }
@@ -224,5 +284,6 @@
   var saved = 0;
   try { saved = parseInt(localStorage.getItem('lowplat.level'), 10) || 0; } catch (e) {}
   loadLevel(saved);
+  updateFpsBtn();
   start();
 })();

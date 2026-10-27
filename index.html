@@ -7,15 +7,17 @@
 <style>
   html, body { margin: 0; height: 100%; background: #0b0c10; color: #8a90a0; font: 13px/1.4 system-ui, sans-serif; }
   body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  #hud { min-height: 20px; }
-  #c { display: block; width: min(100vw, calc((100vh - 60px) * 16 / 9)); height: auto; image-rendering: pixelated; background: #14161c; }
+  #bar { display: flex; align-items: center; gap: 12px; min-height: 26px; }
+  #fps { font: inherit; color: inherit; background: #171a22; border: 1px solid #2b3040; border-radius: 4px; padding: 1px 8px; cursor: pointer; }
+  #fps:hover { border-color: #3a4054; }
+  #c { display: block; width: min(100vw, calc((100vh - 70px) * 16 / 9)); height: auto; image-rendering: pixelated; background: #14161c; }
   #help { min-height: 20px; margin: 6px 12px 0; text-align: center; }
 </style>
 </head>
 <body>
-<div id="hud"></div>
+<div id="bar"><span id="hud"></span><button id="fps" type="button" title="Лимит частоты отрисовки (клавиша F). Физика всегда 60 Гц."></button></div>
 <canvas id="c"></canvas>
-<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок: чем дольше держишь, тем выше (со стены тоже) · зажми в сторону стены — держишься и медленно скользишь · R — заново · [ ] — уровень</div>
+<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок: чем дольше держишь, тем выше (со стены тоже) · зажми в сторону стены — держишься и медленно скользишь · R — заново · [ ] — уровень · F — лимит FPS 60/30</div>
 <script src="src/sim.js"></script>
 <script src="src/levels.js"></script>
 <script src="src/main.js"></script>
