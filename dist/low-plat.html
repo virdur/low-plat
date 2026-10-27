@@ -2,24 +2,100 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Low Plat</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b0c10; color: #8a90a0; font: 13px/1.4 system-ui, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #0b0c10; color: #8a90a0; font: 13px/1.4 system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
   body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  #bar { display: flex; align-items: center; gap: 12px; min-height: 26px; }
+  button, input { font: inherit; color: inherit; }
+  svg { fill: currentColor; }
+
+  #bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px 12px; min-height: 26px; padding: 0 8px; }
+  #btns { display: flex; gap: 6px; }
+  .ib { width: 26px; height: 26px; padding: 4px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+        background: #171a22; border: 1px solid #2b3040; border-radius: 4px; cursor: pointer; }
+  .ib:hover { border-color: #3a4054; }
+  .ib svg { width: 100%; height: 100%; }
+  .ib svg[hidden] { display: none; }
   #fpsbox { display: flex; align-items: center; gap: 8px; }
-  #fps { width: 140px; margin: 0; accent-color: #3dd68c; cursor: pointer; }
-  #fpsnum { width: 52px; font: inherit; color: inherit; background: #171a22; border: 1px solid #2b3040; border-radius: 4px; padding: 1px 4px; }
+  #fpsauto { margin: 0; accent-color: #3dd68c; cursor: pointer; }
+  #fpsautolabel { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  #fps { width: 120px; margin: 0; accent-color: #3dd68c; cursor: pointer; }
+  #fpsnum { width: 52px; background: #171a22; border: 1px solid #2b3040; border-radius: 4px; padding: 1px 4px; }
   #fpsnum:focus { outline: none; border-color: #3dd68c; }
+  #fpsbox.auto #fpsnum, #fpsbox.auto #fps { opacity: .7; }
+
+  #game { display: flex; flex-direction: column; align-items: center; }
+  #stage { position: relative; line-height: 0; }
   #c { display: block; width: min(100vw, calc((100vh - 70px) * 16 / 9)); height: auto; image-rendering: pixelated; background: #14161c; }
+  #pause { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+           background: rgba(11, 12, 16, .74); color: #cfd3dc; font-size: clamp(18px, 4.5vw, 30px); line-height: 1.3; cursor: pointer; text-align: center; }
+  #pause[hidden] { display: none; }
+  #pause small { font-size: 13px; color: #8a90a0; }
   #help { min-height: 20px; margin: 6px 12px 0; text-align: center; }
+
+  /* сенсорное управление: показывается на устройствах с касанием */
+  .touch-only { display: none; }
+  .zone { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+          background: #171a22; border: 1px solid #2b3040; border-radius: 18px; box-sizing: border-box; }
+  .zone svg { width: 44px; height: 44px; }
+  #pad { display: none; margin: 8px; width: calc(100% - 16px); }
+  #pad .half { flex: 1; display: flex; align-items: center; justify-content: center; color: #6b7285; border-radius: 16px; }
+  #pad .half.on, #jump.on { background: rgba(61, 214, 140, .2); color: #3dd68c; }
+  #jump { margin: 8px; width: calc(100% - 16px); align-items: center; justify-content: center; color: #6b7285; }
+
+  html.touch #fpsbox, html.touch #help { display: none; }
+  html.touch body { justify-content: flex-start; }
+  html.touch #game { display: grid; width: 100vw; flex: 1; min-height: 0; justify-items: center; align-items: center;
+                     grid-template-areas: "stage stage" "pad jump"; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; }
+  html.touch #pad, html.touch #jump { align-self: end; margin-bottom: max(8px, env(safe-area-inset-bottom)); }
+  html.touch #stage { grid-area: stage; }
+  html.touch #c { width: 100vw; }
+  html.touch #pad { grid-area: pad; display: flex; height: clamp(110px, 22vh, 190px); }
+  html.touch #jump { grid-area: jump; display: flex; height: clamp(110px, 22vh, 190px); }
+  @media (orientation: landscape) {
+    html.touch body { justify-content: center; }
+    html.touch #game { grid-template-areas: "pad stage jump"; grid-template-columns: 1fr auto 1fr; grid-template-rows: auto; }
+    html.touch #c { width: min(calc(100vw - 200px), calc((100vh - 34px) * 16 / 9)); }
+    html.touch #pad, html.touch #jump { height: min(60vh, 200px); align-self: center; margin-bottom: 8px; }
+  }
 </style>
 </head>
 <body>
-<div id="bar"><span id="hud"></span><label id="fpsbox" title="Лимит частоты отрисовки. Физика всегда считается 60 раз в секунду, так что игра идёт одинаково при любом FPS."><span id="fpslabel"></span><input id="fpsnum" type="number" aria-label="Лимит FPS, число"><input id="fps" type="range" aria-label="Лимит FPS, ползунок"></label></div>
-<canvas id="c"></canvas>
-<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок (чем дольше держишь, тем выше) · в сторону стены — держишься и скользишь; тап — подпрыг, долго — мощный отскок · R — заново · [ ] — уровень</div>
+<div id="bar">
+  <span id="hud"></span>
+  <span id="btns">
+    <button id="btnPause" class="ib" type="button" title="Пауза (Esc или P)" aria-label="Пауза">
+      <svg id="icPause" viewBox="0 0 16 16"><rect x="3" y="2" width="4" height="12"/><rect x="9" y="2" width="4" height="12"/></svg>
+      <svg id="icPlay" viewBox="0 0 16 16" hidden><path d="M4 2l10 6-10 6z"/></svg>
+    </button>
+    <button id="btnRestart" class="ib" type="button" title="Начать уровень заново (R)" aria-label="Начать уровень заново">
+      <svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 1v5H9z"/></svg>
+    </button>
+    <button id="btnMute" class="ib" type="button" title="Звук (M)" aria-label="Звук">
+      <svg id="icSoundOn" viewBox="0 0 16 16"><path d="M2 6h3l4-3v10l-4-3H2z"/><path d="M11.5 5.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      <svg id="icSoundOff" viewBox="0 0 16 16" hidden><path d="M2 6h3l4-3v10l-4-3H2z"/><path d="M11 6l4 4M15 6l-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+  </span>
+  <div id="fpsbox" title="Лимит частоты отрисовки. Авто: равна частоте монитора и сама снижается, если компьютер не справляется. Физика всегда считается 60 раз в секунду, так что игра идёт одинаково при любом FPS.">
+    <span id="fpslabel"></span>
+    <label id="fpsautolabel"><input id="fpsauto" type="checkbox"> авто</label>
+    <input id="fpsnum" type="number" aria-label="Лимит FPS, число">
+    <input id="fps" type="range" aria-label="Лимит FPS, ползунок">
+  </div>
+</div>
+<div id="game">
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="pause" hidden><span>Пауза</span><small>нажми, чтобы продолжить</small></div>
+  </div>
+  <div id="pad" class="zone touch-only" aria-label="Влево и вправо">
+    <div class="half" id="padL"><svg viewBox="0 0 24 24"><path d="M16 4v16L5 12z"/></svg></div>
+    <div class="half" id="padR"><svg viewBox="0 0 24 24"><path d="M8 4v16l11-8z"/></svg></div>
+  </div>
+  <div id="jump" class="zone touch-only" aria-label="Прыжок"><svg viewBox="0 0 24 24"><path d="M12 4l9 15H3z"/></svg></div>
+</div>
+<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок (чем дольше держишь, тем выше) · в сторону стены — держишься и скользишь; тап — подпрыг, долго — мощный отскок · R — заново · [ ] — уровень · P / Esc — пауза · M — звук</div>
 <script>
 /* Физика и разбор уровней. Никакого DOM: тот же код гоняет tools/solve.js в Node. */
 (function (root) {
@@ -92,20 +168,20 @@
 
   function newState() {
     return { x: 0, y: 0, vx: 0, vy: 0, g: false, jh: false, buf: 0, coyote: 0,
-             wallT: 0, wallSide: 0, grip: 0, jt: 0, jb: 0, jx: 0, dead: false, won: false };
+             wallT: 0, wallSide: 0, grip: 0, jt: 0, jb: 0, jx: 0, ev: 0, dead: false, won: false };
   }
 
   function reset(s, lv) {
     s.x = lv.sx; s.y = lv.sy; s.vx = 0; s.vy = 0;
     s.g = false; s.jh = false; s.buf = 0; s.coyote = 0;
-    s.wallT = 0; s.wallSide = 0; s.grip = 0; s.jt = 0; s.jb = 0; s.jx = 0;
+    s.wallT = 0; s.wallSide = 0; s.grip = 0; s.jt = 0; s.jb = 0; s.jx = 0; s.ev = 0;
     s.dead = false; s.won = false;
   }
 
   function copyState(a, b) {
     b.x = a.x; b.y = a.y; b.vx = a.vx; b.vy = a.vy; b.g = a.g; b.jh = a.jh;
     b.buf = a.buf; b.coyote = a.coyote; b.wallT = a.wallT; b.wallSide = a.wallSide;
-    b.grip = a.grip; b.jt = a.jt; b.jb = a.jb; b.jx = a.jx; b.dead = a.dead; b.won = a.won;
+    b.grip = a.grip; b.jt = a.jt; b.jb = a.jb; b.jx = a.jx; b.ev = a.ev; b.dead = a.dead; b.won = a.won;
   }
 
   // Бокс (x,y,SIZE) пересекает твёрдый тайл? Всё за краем поля - стена.
@@ -139,8 +215,13 @@
     return v < t ? Math.min(v + a, t) : Math.max(v - a, t);
   }
 
+  // события шага для звука, на физику не влияют: s.ev = EV_JUMP | EV_WALL | EV_LAND
+  var EV_JUMP = 1, EV_WALL = 2, EV_LAND = 4;
+
   // inp: 1 = влево, 2 = вправо, 4 = прыжок (зажат)
   function step(s, lv, inp) {
+    var wasG = s.g;
+    s.ev = 0;
     var dir = ((inp & 2) ? 1 : 0) - ((inp & 1) ? 1 : 0);
     var jh = (inp & 4) !== 0;
 
@@ -176,11 +257,11 @@
     if (s.buf > 0) {
       if (s.coyote > 0) {
         s.vy = -C.jump; s.jt = C.jumpFrames; s.jb = C.jumpBoost; s.jx = 0;
-        s.coyote = 0; s.buf = 0; s.g = false;
+        s.coyote = 0; s.buf = 0; s.g = false; s.ev |= EV_JUMP;
       } else if (s.wallT > 0) {
         s.vy = -C.wallJump; s.jt = C.wallFrames; s.jb = C.wallBoost;
         s.vx = -s.wallSide * C.wallJX; s.jx = -s.wallSide * C.wallBoostX;
-        s.wallT = 0; s.buf = 0; s.grip = 0;
+        s.wallT = 0; s.buf = 0; s.grip = 0; s.ev |= EV_WALL;
       }
     }
     if (s.jt > 0) {
@@ -204,7 +285,7 @@
     var ny = s.y + s.vy;
     s.g = false;
     if (hitsSolid(lv, s.x, ny)) {
-      if (s.vy > 0) { ny = Math.floor((ny + SIZE - 0.001) / T) * T - SIZE; s.g = true; }
+      if (s.vy > 0) { ny = Math.floor((ny + SIZE - 0.001) / T) * T - SIZE; s.g = true; if (!wasG && s.vy > 2.5) s.ev |= EV_LAND; }
       else { ny = (Math.floor(ny / T) + 1) * T; s.jt = 0; }
       s.vy = 0;
     }
@@ -216,7 +297,7 @@
   }
 
   var LP = root.LP = root.LP || {};
-  LP.sim = { T: T, COLS: COLS, ROWS: ROWS, SIZE: SIZE, C: C, EMPTY: EMPTY, SOLID: SOLID, SPIKE: SPIKE,
+  LP.sim = { T: T, COLS: COLS, ROWS: ROWS, SIZE: SIZE, C: C, EMPTY: EMPTY, SOLID: SOLID, SPIKE: SPIKE, EV_JUMP: EV_JUMP, EV_WALL: EV_WALL, EV_LAND: EV_LAND,
              parseLevel: parseLevel, newState: newState, reset: reset, copyState: copyState, step: step };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 </script>
@@ -404,6 +485,104 @@
 })(typeof globalThis !== 'undefined' ? globalThis : window);
 </script>
 <script>
+/* Звук: короткие эффекты, синтезируются на лету (Web Audio), файлов нет.
+   Браузер разрешает звук только после действия пользователя, поэтому контекст создаётся в unlock(),
+   который вызывается из обработчиков клавиш и касаний. Пока контекста нет или звук выключен, play() ничего не делает. */
+(function (root) {
+  'use strict';
+
+  var VOLUME = 0.35;
+  var ctx = null, master = null, noiseBuf = null, muted = false, broken = false;
+  var suspendedByGame = false;   // на паузе контекст держим остановленным, даже если пришло новое касание
+
+  function unlock() {
+    if (broken) return;
+    if (!ctx) {
+      var AC = root.AudioContext || root.webkitAudioContext;
+      if (!AC) { broken = true; return; }
+      try {
+        ctx = new AC();
+        master = ctx.createGain();
+        master.gain.value = muted ? 0 : VOLUME;
+        master.connect(ctx.destination);
+      } catch (e) { ctx = null; broken = true; return; }
+    }
+    if (ctx.state === 'suspended' && !suspendedByGame) { try { ctx.resume(); } catch (e) {} }
+  }
+
+  function suspend() {
+    suspendedByGame = true;
+    if (ctx && ctx.state === 'running') { try { ctx.suspend(); } catch (e) {} }
+  }
+
+  function resume() {
+    suspendedByGame = false;
+    if (ctx && ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+  }
+
+  function setMuted(m) {
+    muted = !!m;
+    if (master) master.gain.value = muted ? 0 : VOLUME;
+  }
+
+  function isMuted() { return muted; }
+
+  // тон с плавным изменением высоты и затуханием; at - сдвиг по времени, с
+  function tone(f0, f1, dur, type, vol, at) {
+    var t = ctx.currentTime + (at || 0);
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+
+  function noise(dur, vol, f0, f1) {
+    if (!noiseBuf) {
+      var n = Math.floor(ctx.sampleRate * 0.4), d, k;
+      noiseBuf = ctx.createBuffer(1, n, ctx.sampleRate);
+      d = noiseBuf.getChannelData(0);
+      for (k = 0; k < n; k++) d[k] = Math.random() * 2 - 1;
+    }
+    var t = ctx.currentTime;
+    var s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+    s.buffer = noiseBuf;
+    f.type = 'lowpass';
+    f.frequency.setValueAtTime(f0, t);
+    f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(master);
+    s.start(t); s.stop(t + dur + 0.02);
+  }
+
+  var SFX = {
+    jump: function () { tone(360, 640, 0.10, 'triangle', 0.5); },
+    wall: function () { tone(300, 520, 0.09, 'triangle', 0.5); tone(620, 920, 0.06, 'sine', 0.25); },
+    land: function () { tone(170, 70, 0.07, 'sine', 0.45); },
+    die: function () { noise(0.28, 0.6, 2400, 200); tone(260, 50, 0.30, 'sawtooth', 0.3); },
+    win: function () {
+      tone(523, 523, 0.10, 'triangle', 0.45, 0);
+      tone(659, 659, 0.10, 'triangle', 0.45, 0.09);
+      tone(784, 784, 0.10, 'triangle', 0.45, 0.18);
+      tone(1047, 1047, 0.30, 'triangle', 0.45, 0.27);
+    }
+  };
+
+  function play(name) {
+    if (!ctx || muted || ctx.state !== 'running') return;
+    SFX[name]();
+  }
+
+  var LP = root.LP = root.LP || {};
+  LP.audio = { unlock: unlock, play: play, setMuted: setMuted, isMuted: isMuted, suspend: suspend, resume: resume };
+})(typeof globalThis !== 'undefined' ? globalThis : window);
+</script>
+<script>
 /* Отрисовка, ввод, игровой цикл. Рассчитано на слабые машины:
    - физика всегда фиксированным шагом 60 Гц, поэтому игра идёт одинаково при любом FPS;
      частота отрисовки (ползунок 30-360) влияет только на плавность: вид интерполируется между тактами;
@@ -411,7 +590,8 @@
      а если куб не сдвинулся - не рисуется ничего;
    - нет аллокаций в цикле, DOM пишется только при смене текста (раз в секунду);
    - быстрые нажатия клавиш не теряются на низком FPS (защёлка между тактами);
-   - вкладка в фоне -> цикл стоит. */
+   - FPS по умолчанию авто: равен частоте монитора, а если компьютер не справляется, ступенчато снижается;
+   - пауза (кнопка, P, Esc, потеря фокуса, сворачивание вкладки) останавливает цикл целиком и звук. */
 (function () {
   'use strict';
 
@@ -428,6 +608,17 @@
   var fpsInput = document.getElementById('fps');
   var fpsLabel = document.getElementById('fpslabel');
   var fpsNum = document.getElementById('fpsnum');
+  var fpsAutoBox = document.getElementById('fpsauto');
+  var fpsBox = document.getElementById('fpsbox');
+  var btnPause = document.getElementById('btnPause');
+  var btnRestart = document.getElementById('btnRestart');
+  var btnMute = document.getElementById('btnMute');
+  var icPause = document.getElementById('icPause'), icPlay = document.getElementById('icPlay');
+  var icSoundOn = document.getElementById('icSoundOn'), icSoundOff = document.getElementById('icSoundOff');
+  var pauseEl = document.getElementById('pause');
+  var padEl = document.getElementById('pad'), padL = document.getElementById('padL'), padR = document.getElementById('padR');
+  var jumpEl = document.getElementById('jump');
+  var audio = LP.audio;
 
   var levels = [];
   var i;
@@ -550,12 +741,12 @@
     }
   }
 
-  // ---------- ввод (по коду клавиши: работает при любой раскладке) ----------
+  // ---------- ввод (по коду клавиши: работает при любой раскладке; касания - те же клавиши) ----------
   var keys = {};
   var latch = 0;          // клавиши, нажатые и отпущенные между двумя тактами: такт их всё равно увидит
-  var KEY_L = { ArrowLeft: 1, KeyA: 1 };
-  var KEY_R = { ArrowRight: 1, KeyD: 1 };
-  var KEY_J = { ArrowUp: 1, KeyW: 1, Space: 1, KeyZ: 1, KeyK: 1 };
+  var KEY_L = { ArrowLeft: 1, KeyA: 1, TouchLeft: 1 };
+  var KEY_R = { ArrowRight: 1, KeyD: 1, TouchRight: 1 };
+  var KEY_J = { ArrowUp: 1, KeyW: 1, Space: 1, KeyZ: 1, KeyK: 1, TouchJump: 1 };
 
   function inputBits() {
     var b = latch, k;
@@ -569,24 +760,136 @@
     return b;
   }
 
+  function setKey(code, down) {
+    keys[code] = down;
+    if (down) {
+      if (KEY_L[code]) latch |= 1;
+      if (KEY_R[code]) latch |= 2;
+      if (KEY_J[code]) latch |= 4;
+    }
+  }
+
+  function releaseAll() {
+    keys = {}; latch = 0;
+    releaseTouch();
+  }
+
   window.addEventListener('keydown', function (e) {
     var c = e.code;
+    audio.unlock();
     if (e.target === fpsNum) {              // печатаем число: игровые клавиши не трогаем
       if (c === 'Enter' || c === 'NumpadEnter' || c === 'Escape') fpsNum.blur();
       return;
     }
-    if (KEY_L[c] || KEY_R[c] || KEY_J[c] || c === 'KeyR' || c === 'BracketLeft' || c === 'BracketRight') e.preventDefault();
+    if (KEY_L[c] || KEY_R[c] || KEY_J[c] || c === 'KeyR' || c === 'KeyP' || c === 'KeyM' || c === 'BracketLeft' || c === 'BracketRight') e.preventDefault();
     if (e.repeat) return;
-    keys[c] = true;
-    if (KEY_L[c]) latch |= 1;
-    if (KEY_R[c]) latch |= 2;
-    if (KEY_J[c]) latch |= 4;
+    if (c === 'KeyP' || c === 'Escape') { setPaused(!paused); return; }
+    if (c === 'KeyM') { toggleMute(); return; }
+    if (paused) return;
+    setKey(c, true);
     if (c === 'KeyR' && mode === 0) restart();
     else if (c === 'BracketLeft') loadLevel(levelIdx - 1);
     else if (c === 'BracketRight') loadLevel(levelIdx + 1);
   });
   window.addEventListener('keyup', function (e) { keys[e.code] = false; });
-  window.addEventListener('blur', function () { keys = {}; latch = 0; });
+
+  // ---------- касания: слева крестовина (влево/вправо по положению пальца), справа прыжок ----------
+  var padPtr = -1, jumpPtr = -1, padNow = '';
+
+  function padSide(e) {
+    var r = padEl.getBoundingClientRect();
+    return e.clientX < r.left + r.width / 2 ? 'TouchLeft' : 'TouchRight';
+  }
+
+  function setPad(side) {
+    if (side === padNow) return;
+    if (padNow) setKey(padNow, false);
+    padNow = side;
+    if (side) setKey(side, true);
+    padL.className = side === 'TouchLeft' ? 'half on' : 'half';
+    padR.className = side === 'TouchRight' ? 'half on' : 'half';
+  }
+
+  function setJump(on) {
+    setKey('TouchJump', on);
+    if (on) jumpEl.classList.add('on'); else jumpEl.classList.remove('on');
+  }
+
+  function releaseTouch() {
+    padPtr = -1; jumpPtr = -1;
+    setPad(''); setJump(false);
+  }
+
+  function bindZone(el, isPad) {
+    function mine(e) { return e.pointerId === (isPad ? padPtr : jumpPtr); }
+    el.addEventListener('pointerdown', function (e) {
+      audio.unlock();
+      if (paused || (isPad ? padPtr : jumpPtr) !== -1) return;
+      if (isPad) { padPtr = e.pointerId; setPad(padSide(e)); } else { jumpPtr = e.pointerId; setJump(true); }
+      try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      e.preventDefault();
+    });
+    el.addEventListener('pointermove', function (e) { if (isPad && mine(e)) setPad(padSide(e)); });
+    function up(e) {
+      if (!mine(e)) return;
+      if (isPad) { padPtr = -1; setPad(''); } else { jumpPtr = -1; setJump(false); }
+    }
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('lostpointercapture', up);
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  }
+  bindZone(padEl, true);
+  bindZone(jumpEl, false);
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  function enableTouch() { document.documentElement.classList.add('touch'); }
+  function onFirstTouch() { enableTouch(); window.removeEventListener('touchstart', onFirstTouch); }
+  try { if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) enableTouch(); } catch (e) {}
+  window.addEventListener('touchstart', onFirstTouch);
+  // iOS и часть браузеров разрешают звук только после касания/клика
+  window.addEventListener('pointerdown', audio.unlock);
+  window.addEventListener('touchend', audio.unlock);
+
+  // ---------- пауза ----------
+  var paused = false;
+
+  function setPaused(p) {
+    if (p === paused) return;
+    paused = p;
+    pauseEl.hidden = !p;
+    icPause.hidden = p; icPlay.hidden = !p;
+    btnPause.title = p ? 'Продолжить (Esc или P)' : 'Пауза (Esc или P)';
+    releaseAll();
+    if (p) { stop(); audio.suspend(); } else { audio.resume(); start(); }
+  }
+
+  btnPause.addEventListener('click', function () { setPaused(!paused); btnPause.blur(); });
+  btnRestart.addEventListener('click', function () { if (!paused) restart(); btnRestart.blur(); });
+  pauseEl.addEventListener('click', function () { setPaused(false); });
+  // потеряли фокус или вкладку: ставим на паузу, чтобы не проиграть уровень в фоне
+  window.addEventListener('blur', function () { setPaused(true); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) setPaused(true); });
+
+  // ---------- звук ----------
+  var muted = false;
+  try { muted = localStorage.getItem('lowplat.mute') === '1'; } catch (e) {}
+  audio.setMuted(muted);
+
+  function applyMuteUi() {
+    icSoundOn.hidden = muted; icSoundOff.hidden = !muted;
+    btnMute.title = muted ? 'Включить звук (M)' : 'Выключить звук (M)';
+    btnMute.setAttribute('aria-label', muted ? 'Включить звук' : 'Выключить звук');
+  }
+
+  function toggleMute() {
+    muted = !muted;
+    audio.setMuted(muted);
+    try { localStorage.setItem('lowplat.mute', muted ? '1' : '0'); } catch (e) {}
+    applyMuteUi();
+  }
+
+  btnMute.addEventListener('click', function () { audio.unlock(); toggleMute(); btnMute.blur(); });
 
   // ---------- такт физики (всегда 60 в секунду) ----------
   function tick() {
@@ -595,11 +898,16 @@
       prevX = P.x; prevY = P.y; prevAng = ang;
       sim.step(P, lv, inputBits());
       ticks++;
+      if (P.ev) {
+        if (P.ev & sim.EV_JUMP) audio.play('jump');
+        if (P.ev & sim.EV_WALL) audio.play('wall');
+        if (P.ev & sim.EV_LAND) audio.play('land');
+      }
       if (P.vx > 0.3) face = 1; else if (P.vx < -0.3) face = -1;
       if (!P.g && !P.grip) ang += face * SPIN;                  // в воздухе крутится
       else ang += (Math.round(ang / HALF_PI) * HALF_PI - ang) * 0.35; // на земле и на стене встаёт ровно
-      if (P.dead) { deaths++; burst(); mode = 1; modeT = 36; updateHud(); }
-      else if (P.won) { mode = 2; modeT = 40; }
+      if (P.dead) { deaths++; burst(); mode = 1; modeT = 36; updateHud(); audio.play('die'); }
+      else if (P.won) { mode = 2; modeT = 40; audio.play('win'); }
     } else if (mode === 1) {
       for (k = 0; k < NP; k++) { ppx[k] += pvx[k]; ppy[k] += pvy[k]; pvy[k] += 0.25; }
       if (pLife > 0) pLife--;
@@ -657,50 +965,116 @@
     if (txt !== lastHud) { hud.textContent = txt; lastHud = txt; }
   }
 
-  // ---------- лимит FPS (ползунок) ----------
+  // ---------- частота кадров: авто (по монитору) или вручную ----------
   var FPS_MIN = 30, FPS_MAX = 360;
-  var fpsCap = 60, fpsNow = 0, fpsCount = 0, fpsStamp = 0, nextRender = 0;
+  var HZ_SNAP = [30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360];
+  var fpsAuto = true, manualCap = 60;
+  var monitorHz = 60, hzSeen = 0;      // частота монитора и последнее измерение (нужны два одинаковых подряд)
+  var autoDiv = 1;                     // авто: лимит = герцовка / autoDiv (целые доли дают ровный темп кадров)
+  var slowSecs = 0, goodSecs = 0, warm = 0;
+  var fpsCap = 60, fpsNow = 0, fpsCount = 0, fpsStamp = 0, nextRender = 0, workSum = 0, workN = 0;
+  var dts = new Float32Array(30), dtsSorted = new Float32Array(30), dtN = 0;
+  var clock = (window.performance && performance.now) ? function () { return performance.now(); } : function () { return Date.now(); };
+
   try {
-    var savedFps = parseInt(localStorage.getItem('lowplat.fps'), 10);
-    if (savedFps >= FPS_MIN && savedFps <= FPS_MAX) fpsCap = savedFps;
+    var savedFps = localStorage.getItem('lowplat.fps');
+    if (savedFps !== null && savedFps !== 'auto') {
+      var sv = parseInt(savedFps, 10);
+      if (sv >= FPS_MIN && sv <= FPS_MAX) { fpsAuto = false; manualCap = sv; fpsCap = sv; }
+    }
   } catch (e) {}
+
+  function clampFps(v) { return Math.max(FPS_MIN, Math.min(FPS_MAX, v)); }
+
+  function saveFps() {
+    try { localStorage.setItem('lowplat.fps', fpsAuto ? 'auto' : String(manualCap)); } catch (e) {}
+  }
 
   function updateFpsLabel() {
     var txt = 'FPS: ' + (fpsNow || '…') + ' · лимит';
     if (fpsLabel.textContent !== txt) fpsLabel.textContent = txt;
   }
 
-  function clampFps(v) { return Math.max(FPS_MIN, Math.min(FPS_MAX, v)); }
-
-  function setFpsCap(v) {
-    if (v === fpsCap) return;
-    fpsCap = v;
-    try { localStorage.setItem('lowplat.fps', String(fpsCap)); } catch (e) {}
-    nextRender = 0; fpsCount = 0; fpsStamp = 0; fpsNow = 0;
+  function syncFpsUi() {
+    if (document.activeElement !== fpsNum) fpsNum.value = fpsCap;    // пока печатаешь, поле не трогаем
+    fpsInput.value = fpsCap;
+    fpsAutoBox.checked = fpsAuto;
+    fpsBox.className = fpsAuto ? 'auto' : '';
     updateFpsLabel();
   }
 
-  fpsInput.min = FPS_MIN; fpsInput.max = FPS_MAX; fpsInput.step = 1; fpsInput.value = fpsCap;
-  fpsNum.min = FPS_MIN; fpsNum.max = FPS_MAX; fpsNum.step = 1; fpsNum.value = fpsCap;
+  function resetFpsStats() {
+    fpsCount = 0; fpsStamp = 0; fpsNow = 0; workSum = 0; workN = 0;
+    slowSecs = 0; goodSecs = 0; warm = 1; nextRender = 0;
+  }
 
-  fpsInput.addEventListener('input', function () {
-    var v = clampFps(parseInt(fpsInput.value, 10) || 60);
-    fpsNum.value = v;
-    setFpsCap(v);
-  });
+  function applyAuto() {
+    fpsCap = clampFps(Math.round(monitorHz / autoDiv));
+    resetFpsStats();
+    syncFpsUi();
+  }
+
+  function setManual(v) {
+    fpsAuto = false; manualCap = v; fpsCap = v;
+    saveFps(); resetFpsStats(); syncFpsUi();
+  }
+
+  function setAutoMode(on) {
+    fpsAuto = on;
+    if (on) { autoDiv = 1; applyAuto(); } else { fpsCap = manualCap; resetFpsStats(); syncFpsUi(); }
+    saveFps();
+  }
+
+  fpsInput.min = FPS_MIN; fpsInput.max = FPS_MAX; fpsInput.step = 1;
+  fpsNum.min = FPS_MIN; fpsNum.max = FPS_MAX; fpsNum.step = 1;
+
+  fpsAutoBox.addEventListener('change', function () { setAutoMode(fpsAutoBox.checked); fpsAutoBox.blur(); });
+  fpsInput.addEventListener('input', function () { setManual(clampFps(parseInt(fpsInput.value, 10) || 60)); });
   // число вручную: пока печатаешь, подходящее значение применяется сразу, остальное поправится, когда закончишь
   fpsNum.addEventListener('input', function () {
     var v = parseInt(fpsNum.value, 10);
-    if (v >= FPS_MIN && v <= FPS_MAX) { fpsInput.value = v; setFpsCap(v); }
+    if (v >= FPS_MIN && v <= FPS_MAX) setManual(v);
   });
   fpsNum.addEventListener('change', function () {
     var v = clampFps(parseInt(fpsNum.value, 10) || fpsCap);   // пусто или мусор -> прежнее значение, вне границ -> ближайшая граница
-    fpsNum.value = v; fpsInput.value = v;
-    setFpsCap(v);
+    fpsNum.value = v;
+    setManual(v);
   });
   // после выбора снимаем фокус с ползунка, чтобы стрелки и пробел управляли игрой, а не им
   fpsInput.addEventListener('change', function () { fpsInput.blur(); });
   fpsInput.addEventListener('pointerup', function () { fpsInput.blur(); });
+
+  // частота монитора: медиана 30 интервалов между кадрами браузера, подгоняется к ближайшей стандартной
+  function snapHz(hz) {
+    var best = 0, bd = 1e9, k, d;
+    for (k = 0; k < HZ_SNAP.length; k++) {
+      d = Math.abs(hz - HZ_SNAP[k]) / HZ_SNAP[k];
+      if (d < bd) { bd = d; best = HZ_SNAP[k]; }
+    }
+    return bd < 0.04 ? best : clampFps(Math.round(hz));
+  }
+
+  function detectHz() {
+    var i2, j, v;
+    for (i2 = 0; i2 < 30; i2++) {                 // сортировка вставками: без выделения памяти
+      v = dts[i2]; j = i2 - 1;
+      while (j >= 0 && dtsSorted[j] > v) { dtsSorted[j + 1] = dtsSorted[j]; j--; }
+      dtsSorted[j + 1] = v;
+    }
+    var hz = snapHz(1000 / dtsSorted[15]);
+    if (hz === hzSeen && hz !== monitorHz) { monitorHz = hz; if (fpsAuto) applyAuto(); }
+    hzSeen = hz;
+  }
+
+  // раз в секунду: если кадры не успевают или кадр занимает больше 60% своего времени, лимит делим на целое число;
+  // если 10 секунд всё с запасом, возвращаем обратно
+  function autoStep(work) {
+    var interval = 1000 / fpsCap;
+    if (warm > 0) { warm--; return; }
+    if (fpsNow < fpsCap * 0.85 || work > interval * 0.6) { slowSecs++; goodSecs = 0; } else { slowSecs = 0; goodSecs++; }
+    if (slowSecs >= 2 && monitorHz / (autoDiv + 1) >= FPS_MIN) { autoDiv++; applyAuto(); }
+    else if (goodSecs >= 10 && autoDiv > 1 && work < 300 / Math.round(monitorHz / (autoDiv - 1))) { autoDiv--; applyAuto(); }
+  }
 
   // ---------- цикл ----------
   var STEP = 1000 / 60, acc = 0, last = 0, raf = 0;
@@ -711,8 +1085,13 @@
     if (!last) last = now;
     var dt = now - last;
     last = now;
+    if (dt > 0 && dt < 100) {                 // сырые интервалы между кадрами браузера - для определения герцовки
+      dts[dtN++] = dt;
+      if (dtN === 30) { detectHz(); dtN = 0; }
+    }
     if (dt > 250) dt = 250;
     acc += dt;
+    var t0 = clock();
     var n = 0;
     while (acc >= STEP && n < MAX_TICKS) { tick(); acc -= STEP; n++; }
     if (n === MAX_TICKS) acc = 0;
@@ -722,23 +1101,26 @@
       if (nextRender < now) nextRender = now + interval;
       render(acc / STEP);
       fpsCount++;
+      workSum += clock() - t0; workN++;
     }
     if (!fpsStamp) fpsStamp = now;
     else if (now - fpsStamp >= 1000) {
       fpsNow = Math.round(fpsCount * 1000 / (now - fpsStamp));
-      fpsCount = 0; fpsStamp = now;
+      var work = workN ? workSum / workN : 0;
+      fpsCount = 0; fpsStamp = now; workSum = 0; workN = 0;
+      if (fpsAuto) autoStep(work);
       updateFpsLabel(); updateHud();
     }
   }
 
-  function start() { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } }
+  function start() { if (!raf) { last = 0; dtN = 0; resetFpsStats(); raf = requestAnimationFrame(frame); } }
   function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } keys = {}; latch = 0; }
-  document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else start(); });
 
   var saved = 0;
   try { saved = parseInt(localStorage.getItem('lowplat.level'), 10) || 0; } catch (e) {}
   loadLevel(saved);
-  updateFpsLabel();
+  applyMuteUi();
+  syncFpsUi();
   start();
 })();
 </script>

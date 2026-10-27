@@ -2,26 +2,103 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Low Plat</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #0b0c10; color: #8a90a0; font: 13px/1.4 system-ui, sans-serif; }
+  html, body { margin: 0; height: 100%; background: #0b0c10; color: #8a90a0; font: 13px/1.4 system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
   body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
-  #bar { display: flex; align-items: center; gap: 12px; min-height: 26px; }
+  button, input { font: inherit; color: inherit; }
+  svg { fill: currentColor; }
+
+  #bar { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 4px 12px; min-height: 26px; padding: 0 8px; }
+  #btns { display: flex; gap: 6px; }
+  .ib { width: 26px; height: 26px; padding: 4px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center;
+        background: #171a22; border: 1px solid #2b3040; border-radius: 4px; cursor: pointer; }
+  .ib:hover { border-color: #3a4054; }
+  .ib svg { width: 100%; height: 100%; }
+  .ib svg[hidden] { display: none; }
   #fpsbox { display: flex; align-items: center; gap: 8px; }
-  #fps { width: 140px; margin: 0; accent-color: #3dd68c; cursor: pointer; }
-  #fpsnum { width: 52px; font: inherit; color: inherit; background: #171a22; border: 1px solid #2b3040; border-radius: 4px; padding: 1px 4px; }
+  #fpsauto { margin: 0; accent-color: #3dd68c; cursor: pointer; }
+  #fpsautolabel { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  #fps { width: 120px; margin: 0; accent-color: #3dd68c; cursor: pointer; }
+  #fpsnum { width: 52px; background: #171a22; border: 1px solid #2b3040; border-radius: 4px; padding: 1px 4px; }
   #fpsnum:focus { outline: none; border-color: #3dd68c; }
+  #fpsbox.auto #fpsnum, #fpsbox.auto #fps { opacity: .7; }
+
+  #game { display: flex; flex-direction: column; align-items: center; }
+  #stage { position: relative; line-height: 0; }
   #c { display: block; width: min(100vw, calc((100vh - 70px) * 16 / 9)); height: auto; image-rendering: pixelated; background: #14161c; }
+  #pause { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+           background: rgba(11, 12, 16, .74); color: #cfd3dc; font-size: clamp(18px, 4.5vw, 30px); line-height: 1.3; cursor: pointer; text-align: center; }
+  #pause[hidden] { display: none; }
+  #pause small { font-size: 13px; color: #8a90a0; }
   #help { min-height: 20px; margin: 6px 12px 0; text-align: center; }
+
+  /* сенсорное управление: показывается на устройствах с касанием */
+  .touch-only { display: none; }
+  .zone { touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+          background: #171a22; border: 1px solid #2b3040; border-radius: 18px; box-sizing: border-box; }
+  .zone svg { width: 44px; height: 44px; }
+  #pad { display: none; margin: 8px; width: calc(100% - 16px); }
+  #pad .half { flex: 1; display: flex; align-items: center; justify-content: center; color: #6b7285; border-radius: 16px; }
+  #pad .half.on, #jump.on { background: rgba(61, 214, 140, .2); color: #3dd68c; }
+  #jump { margin: 8px; width: calc(100% - 16px); align-items: center; justify-content: center; color: #6b7285; }
+
+  html.touch #fpsbox, html.touch #help { display: none; }
+  html.touch body { justify-content: flex-start; }
+  html.touch #game { display: grid; width: 100vw; flex: 1; min-height: 0; justify-items: center; align-items: center;
+                     grid-template-areas: "stage stage" "pad jump"; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; }
+  html.touch #pad, html.touch #jump { align-self: end; margin-bottom: max(8px, env(safe-area-inset-bottom)); }
+  html.touch #stage { grid-area: stage; }
+  html.touch #c { width: 100vw; }
+  html.touch #pad { grid-area: pad; display: flex; height: clamp(110px, 22vh, 190px); }
+  html.touch #jump { grid-area: jump; display: flex; height: clamp(110px, 22vh, 190px); }
+  @media (orientation: landscape) {
+    html.touch body { justify-content: center; }
+    html.touch #game { grid-template-areas: "pad stage jump"; grid-template-columns: 1fr auto 1fr; grid-template-rows: auto; }
+    html.touch #c { width: min(calc(100vw - 200px), calc((100vh - 34px) * 16 / 9)); }
+    html.touch #pad, html.touch #jump { height: min(60vh, 200px); align-self: center; margin-bottom: 8px; }
+  }
 </style>
 </head>
 <body>
-<div id="bar"><span id="hud"></span><label id="fpsbox" title="Лимит частоты отрисовки. Физика всегда считается 60 раз в секунду, так что игра идёт одинаково при любом FPS."><span id="fpslabel"></span><input id="fpsnum" type="number" aria-label="Лимит FPS, число"><input id="fps" type="range" aria-label="Лимит FPS, ползунок"></label></div>
-<canvas id="c"></canvas>
-<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок (чем дольше держишь, тем выше) · в сторону стены — держишься и скользишь; тап — подпрыг, долго — мощный отскок · R — заново · [ ] — уровень</div>
+<div id="bar">
+  <span id="hud"></span>
+  <span id="btns">
+    <button id="btnPause" class="ib" type="button" title="Пауза (Esc или P)" aria-label="Пауза">
+      <svg id="icPause" viewBox="0 0 16 16"><rect x="3" y="2" width="4" height="12"/><rect x="9" y="2" width="4" height="12"/></svg>
+      <svg id="icPlay" viewBox="0 0 16 16" hidden><path d="M4 2l10 6-10 6z"/></svg>
+    </button>
+    <button id="btnRestart" class="ib" type="button" title="Начать уровень заново (R)" aria-label="Начать уровень заново">
+      <svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M14 1v5H9z"/></svg>
+    </button>
+    <button id="btnMute" class="ib" type="button" title="Звук (M)" aria-label="Звук">
+      <svg id="icSoundOn" viewBox="0 0 16 16"><path d="M2 6h3l4-3v10l-4-3H2z"/><path d="M11.5 5.2a4 4 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+      <svg id="icSoundOff" viewBox="0 0 16 16" hidden><path d="M2 6h3l4-3v10l-4-3H2z"/><path d="M11 6l4 4M15 6l-4 4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+    </button>
+  </span>
+  <div id="fpsbox" title="Лимит частоты отрисовки. Авто: равна частоте монитора и сама снижается, если компьютер не справляется. Физика всегда считается 60 раз в секунду, так что игра идёт одинаково при любом FPS.">
+    <span id="fpslabel"></span>
+    <label id="fpsautolabel"><input id="fpsauto" type="checkbox"> авто</label>
+    <input id="fpsnum" type="number" aria-label="Лимит FPS, число">
+    <input id="fps" type="range" aria-label="Лимит FPS, ползунок">
+  </div>
+</div>
+<div id="game">
+  <div id="stage">
+    <canvas id="c"></canvas>
+    <div id="pause" hidden><span>Пауза</span><small>нажми, чтобы продолжить</small></div>
+  </div>
+  <div id="pad" class="zone touch-only" aria-label="Влево и вправо">
+    <div class="half" id="padL"><svg viewBox="0 0 24 24"><path d="M16 4v16L5 12z"/></svg></div>
+    <div class="half" id="padR"><svg viewBox="0 0 24 24"><path d="M8 4v16l11-8z"/></svg></div>
+  </div>
+  <div id="jump" class="zone touch-only" aria-label="Прыжок"><svg viewBox="0 0 24 24"><path d="M12 4l9 15H3z"/></svg></div>
+</div>
+<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок (чем дольше держишь, тем выше) · в сторону стены — держишься и скользишь; тап — подпрыг, долго — мощный отскок · R — заново · [ ] — уровень · P / Esc — пауза · M — звук</div>
 <script src="src/sim.js"></script>
 <script src="src/levels.js"></script>
+<script src="src/audio.js"></script>
 <script src="src/main.js"></script>
 </body>
 </html>
