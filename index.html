@@ -8,16 +8,16 @@
   html, body { margin: 0; height: 100%; background: #0b0c10; color: #8a90a0; font: 13px/1.4 system-ui, sans-serif; }
   body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
   #bar { display: flex; align-items: center; gap: 12px; min-height: 26px; }
-  #fps { font: inherit; color: inherit; background: #171a22; border: 1px solid #2b3040; border-radius: 4px; padding: 1px 8px; cursor: pointer; }
-  #fps:hover { border-color: #3a4054; }
+  #fpsbox { display: flex; align-items: center; gap: 8px; }
+  #fps { width: 140px; margin: 0; accent-color: #3dd68c; cursor: pointer; }
   #c { display: block; width: min(100vw, calc((100vh - 70px) * 16 / 9)); height: auto; image-rendering: pixelated; background: #14161c; }
   #help { min-height: 20px; margin: 6px 12px 0; text-align: center; }
 </style>
 </head>
 <body>
-<div id="bar"><span id="hud"></span><button id="fps" type="button" title="Лимит частоты отрисовки (клавиша F). Физика всегда 60 Гц."></button></div>
+<div id="bar"><span id="hud"></span><label id="fpsbox" title="Лимит частоты отрисовки. Физика всегда считается 60 раз в секунду, так что игра идёт одинаково при любом FPS."><span id="fpslabel"></span><input id="fps" type="range" aria-label="Лимит FPS"></label></div>
 <canvas id="c"></canvas>
-<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок: чем дольше держишь, тем выше · зажми в сторону стены — держишься и медленно скользишь; тапами по прыжку можно карабкаться вверх, долгое удержание — мощный отскок · R — заново · [ ] — уровень · F — лимит FPS 60/30</div>
+<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок: чем дольше держишь, тем выше · зажми в сторону стены — держишься и медленно скользишь; тапами по прыжку можно карабкаться вверх, долгое удержание — мощный отскок · R — заново · [ ] — уровень · ползунок — лимит FPS (30–360, физика от него не зависит)</div>
 <script src="src/sim.js"></script>
 <script src="src/levels.js"></script>
 <script src="src/main.js"></script>
