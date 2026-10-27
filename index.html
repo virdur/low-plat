@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Low Plat</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0b0c10; color: #8a90a0; font: 13px/1.4 system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #hud { min-height: 20px; }
+  #c { display: block; width: min(100vw, calc((100vh - 60px) * 16 / 9)); height: auto; image-rendering: pixelated; background: #14161c; }
+  #help { min-height: 20px; margin: 6px 12px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div id="hud"></div>
+<canvas id="c"></canvas>
+<div id="help">← → / A D — бег · Пробел / ↑ / W — прыжок · зажми в сторону стены — держишься и медленно скользишь · прыжок со стены — отскок · R — заново · [ ] — уровень</div>
+<script src="src/sim.js"></script>
+<script src="src/levels.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
