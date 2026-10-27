@@ -22,16 +22,18 @@
     jump: 3.0,
     jumpBoost: 0.62,
     jumpFrames: 10,
-    // отскок от стены растёт с удержанием так же, как обычный прыжок: короткий тап -
-    // слабый подпрыг, на нём можно карабкаться вдоль стены; полное удержание -
-    // сильный отскок (по горизонтали wallJX + wallFrames * wallBoostX = 4.2, как раньше)
+    // прыжок со стены: высота растёт с удержанием, как у обычного прыжка.
+    // Короткое нажатие даёт небольшой отскок (wallJX): если давишь в стену, куб тут же возвращается к ней,
+    // и можно карабкаться тапами. Если держишь кнопку дольше wallXDelay кадров (~100 мс), отскок набирает силу:
+    // за оставшиеся кадры к скорости добавляется wallBoostX на кадр, итого около 4.4, как у мощного отскока.
     wallJump: 3.0,
     wallBoost: 0.62,
-    wallJX: 1.2,
-    wallBoostX: 0.3,
+    wallJX: 1.5,       // толчок от стены на минимальном прыжке
+    wallBoostX: 0.9,
     wallFrames: 10,
+    wallXDelay: 6,
     coyote: 6,
-    wallCoyote: 5,
+    wallCoyote: 8,     // после отрыва от стены ещё столько кадров можно оттолкнуться от неё
     buffer: 6
   };
 
@@ -142,8 +144,8 @@
       s.wallT = 0;
     }
 
-    // бег; пока держишь прыжок после отскока от стены, куб летит по инерции отскока
-    if (!(s.jx !== 0 && s.jt > 0 && jh)) {
+    // бег; когда отскок от стены набирает силу, куб летит по инерции отскока
+    if (!(s.jx !== 0 && s.jt > 0 && jh && C.wallFrames - s.jt >= C.wallXDelay)) {
       var a = dir === 0 ? (s.g ? C.fric : C.airDrag) : (s.g ? C.accel : C.airAccel);
       s.vx = approach(s.vx, dir * C.maxRun, a);
     }
@@ -156,12 +158,17 @@
         s.coyote = 0; s.buf = 0; s.g = false;
       } else if (s.wallT > 0) {
         s.vy = -C.wallJump; s.jt = C.wallFrames; s.jb = C.wallBoost;
-        s.vx = -s.wallSide * C.wallJX; s.jx = -s.wallSide * C.wallBoostX;
+        s.vx = -s.wallSide * C.wallJX;
+        s.jx = -s.wallSide * C.wallBoostX;
         s.wallT = 0; s.buf = 0; s.grip = 0;
       }
     }
     if (s.jt > 0) {
-      if (jh) { s.vy -= s.jb; s.vx += s.jx; s.jt--; } else s.jt = 0;
+      if (jh) {
+        s.vy -= s.jb;
+        if (s.jx !== 0 && C.wallFrames - s.jt >= C.wallXDelay) s.vx += s.jx;
+        s.jt--;
+      } else s.jt = 0;
     }
 
     // гравитация; на стене с нажатием "в стену" падаем медленно
