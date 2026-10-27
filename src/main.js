@@ -1,8 +1,10 @@
 /* Отрисовка, ввод, игровой цикл. Рассчитано на слабые машины:
-   - уровень один раз рисуется в offscreen-канвас, в кадре перерисовывается только область вокруг куба;
-   - фиксированный шаг 60 Гц, при тормозах игра замедляется, а не копит очередь;
+   - физика всегда фиксированным шагом 60 Гц, поэтому игра идёт одинаково при любом FPS;
+     частота отрисовки (ползунок 30-360) влияет только на плавность: вид интерполируется между тактами;
+   - уровень один раз рисуется в offscreen-канвас, в кадре перерисовывается только область вокруг куба,
+     а если куб не сдвинулся - не рисуется ничего;
    - нет аллокаций в цикле, DOM пишется только при смене текста (раз в секунду);
-   - лимит частоты отрисовки 60/30 (клавиша F или кнопка): физика всегда 60 Гц, режется только рисование;
+   - быстрые нажатия клавиш не теряются на низком FPS (защёлка между тактами);
    - вкладка в фоне -> цикл стоит. */
 (function () {
   'use strict';
@@ -11,13 +13,14 @@
   var T = sim.T, W = sim.COLS * T, H = sim.ROWS * T, SIZE = sim.SIZE;
 
   var COLORS = { bg: '#14161c', wall: '#3a4054', spike: '#e5484d', exit: '#3dd68c', pole: '#cfd3dc', cube: '#ffc53d', cubeDark: '#b88a12' };
-  var HALF_PI = Math.PI / 2, TWO_PI = Math.PI * 2;
+  var HALF_PI = Math.PI / 2;
 
   var canvas = document.getElementById('c');
   canvas.width = W; canvas.height = H;
   var ctx = canvas.getContext('2d', { alpha: false });
   var hud = document.getElementById('hud');
-  var fpsBtn = document.getElementById('fps');
+  var fpsInput = document.getElementById('fps');
+  var fpsLabel = document.getElementById('fpslabel');
 
   var levels = [];
   var i;
@@ -99,13 +102,14 @@
   var mode = 0;           // 0 игра, 1 смерть, 2 победа
   var modeT = 0;
   var deaths = 0;
-  var ticks = 0;          // кадры на текущем уровне
+  var ticks = 0;          // такты физики на текущем уровне
   var needFull = true;    // перерисовать всё
   var lastRect = { x: 0, y: 0, w: 0, h: 0 };
   var lastHud = '';
 
-  // поворот куба: только для вида, на физику не влияет
-  var ang = 0, face = 1;
+  // вид: поворот куба и положение на прошлом такте (для интерполяции), на физику не влияют
+  var ang = 0, face = 1, prevAng = 0, prevX = 0, prevY = 0;
+  var drawX = -1, drawY = -1, drawAng = 0;   // что нарисовано сейчас, чтобы не рисовать то же самое
   var SPIN = 0.1;         // рад/такт в воздухе
 
   var NP = 14;
@@ -118,13 +122,14 @@
     buildCache(lv);
     restart();
     ticks = 0;
+    updateHud();
     try { localStorage.setItem('lowplat.level', String(levelIdx)); } catch (e) {}
   }
 
   function restart() {
     sim.reset(P, lv);
     mode = 0; pLife = 0; needFull = true;
-    ang = 0; face = 1;
+    ang = 0; face = 1; prevAng = 0; prevX = P.x; prevY = P.y;
   }
 
   function burst() {
@@ -140,12 +145,14 @@
 
   // ---------- ввод (по коду клавиши: работает при любой раскладке) ----------
   var keys = {};
+  var latch = 0;          // клавиши, нажатые и отпущенные между двумя тактами: такт их всё равно увидит
   var KEY_L = { ArrowLeft: 1, KeyA: 1 };
   var KEY_R = { ArrowRight: 1, KeyD: 1 };
   var KEY_J = { ArrowUp: 1, KeyW: 1, Space: 1, KeyZ: 1, KeyK: 1 };
 
   function inputBits() {
-    var b = 0, k;
+    var b = latch, k;
+    latch = 0;
     for (k in keys) {
       if (!keys[k]) continue;
       if (KEY_L[k]) b |= 1;
@@ -160,25 +167,27 @@
     if (KEY_L[c] || KEY_R[c] || KEY_J[c] || c === 'KeyR' || c === 'BracketLeft' || c === 'BracketRight') e.preventDefault();
     if (e.repeat) return;
     keys[c] = true;
-    if (c === 'KeyF') toggleFps();
-    else if (c === 'KeyR' && mode === 0) restart();
+    if (KEY_L[c]) latch |= 1;
+    if (KEY_R[c]) latch |= 2;
+    if (KEY_J[c]) latch |= 4;
+    if (c === 'KeyR' && mode === 0) restart();
     else if (c === 'BracketLeft') loadLevel(levelIdx - 1);
     else if (c === 'BracketRight') loadLevel(levelIdx + 1);
   });
   window.addEventListener('keyup', function (e) { keys[e.code] = false; });
-  window.addEventListener('blur', function () { keys = {}; });
+  window.addEventListener('blur', function () { keys = {}; latch = 0; });
 
-  // ---------- такт ----------
+  // ---------- такт физики (всегда 60 в секунду) ----------
   function tick() {
     var k;
     if (mode === 0) {
+      prevX = P.x; prevY = P.y; prevAng = ang;
       sim.step(P, lv, inputBits());
       ticks++;
       if (P.vx > 0.3) face = 1; else if (P.vx < -0.3) face = -1;
       if (!P.g && !P.grip) ang += face * SPIN;                  // в воздухе крутится
       else ang += (Math.round(ang / HALF_PI) * HALF_PI - ang) * 0.35; // на земле и на стене встаёт ровно
-      if (ang > TWO_PI) ang -= TWO_PI; else if (ang < -TWO_PI) ang += TWO_PI;
-      if (P.dead) { deaths++; burst(); mode = 1; modeT = 36; }
+      if (P.dead) { deaths++; burst(); mode = 1; modeT = 36; updateHud(); }
       else if (P.won) { mode = 2; modeT = 40; }
     } else if (mode === 1) {
       for (k = 0; k < NP; k++) { ppx[k] += pvx[k]; ppy[k] += pvy[k]; pvy[k] += 0.25; }
@@ -189,30 +198,35 @@
     }
   }
 
-  // ---------- отрисовка ----------
-  function render() {
-    var k, x, y, rx, ry, rw, rh;
-    if (needFull || mode === 1) {
+  // ---------- отрисовка; alpha (0..1) - сколько прошло от прошлого такта к следующему ----------
+  function render(alpha) {
+    var k, x, y, a, rx, ry, rw, rh;
+    if (mode === 1) {
+      ctx.drawImage(cache, 0, 0);
+      needFull = false; lastRect.w = 0; drawX = -1;
+      ctx.fillStyle = COLORS.cube;
+      var ps = pLife > 12 ? 4 : 2;
+      for (k = 0; k < NP; k++) ctx.fillRect(ppx[k] + pvx[k] * alpha - ps / 2, ppy[k] + pvy[k] * alpha - ps / 2, ps, ps);
+      return;
+    }
+    x = Math.round(prevX + (P.x - prevX) * alpha);
+    y = Math.round(prevY + (P.y - prevY) * alpha);
+    a = prevAng + (ang - prevAng) * alpha;
+    if (!needFull && x === drawX && y === drawY && a === drawAng) return;   // ничего не изменилось
+    if (needFull) {
       ctx.drawImage(cache, 0, 0);
       needFull = false;
-      lastRect.w = 0;
     } else if (lastRect.w) {
       ctx.drawImage(cache, lastRect.x, lastRect.y, lastRect.w, lastRect.h, lastRect.x, lastRect.y, lastRect.w, lastRect.h);
     }
-    if (mode === 1) {
-      ctx.fillStyle = COLORS.cube;
-      var s = pLife > 12 ? 4 : 2;
-      for (k = 0; k < NP; k++) ctx.fillRect(ppx[k] - s / 2, ppy[k] - s / 2, s, s);
-      return;
-    }
-    x = Math.round(P.x); y = Math.round(P.y);
-    if (Math.abs(ang - Math.round(ang / HALF_PI) * HALF_PI) < 0.02) {   // ровный куб: быстрый путь без сглаживания
+    drawX = x; drawY = y; drawAng = a;
+    if (Math.abs(a - Math.round(a / HALF_PI) * HALF_PI) < 0.02) {   // ровный куб: быстрый путь без сглаживания
       ctx.fillStyle = COLORS.cubeDark;
       ctx.fillRect(x, y, SIZE, SIZE);
       ctx.fillStyle = COLORS.cube;
       ctx.fillRect(x + 2, y + 2, SIZE - 4, SIZE - 4);
     } else {
-      var c = Math.cos(ang), s = Math.sin(ang), h = SIZE / 2;
+      var c = Math.cos(a), s = Math.sin(a), h = SIZE / 2;
       ctx.setTransform(c, s, -s, c, x + h, y + h);
       ctx.fillStyle = COLORS.cubeDark;
       ctx.fillRect(-h, -h, SIZE, SIZE);
@@ -232,58 +246,66 @@
     if (txt !== lastHud) { hud.textContent = txt; lastHud = txt; }
   }
 
-  // ---------- лимит FPS ----------
-  var fpsCap = 60, fpsNow = 0, fpsCount = 0, fpsStamp = 0, lastRender = 0, ticked = false;
-  try { if (localStorage.getItem('lowplat.fps') === '30') fpsCap = 30; } catch (e) {}
+  // ---------- лимит FPS (ползунок) ----------
+  var FPS_MIN = 30, FPS_MAX = 360;
+  var fpsCap = 60, fpsNow = 0, fpsCount = 0, fpsStamp = 0, nextRender = 0;
+  try {
+    var savedFps = parseInt(localStorage.getItem('lowplat.fps'), 10);
+    if (savedFps >= FPS_MIN && savedFps <= FPS_MAX) fpsCap = savedFps;
+  } catch (e) {}
 
-  function updateFpsBtn() {
-    var txt = 'FPS: ' + (fpsNow || fpsCap) + ' (лимит ' + fpsCap + ')';
-    if (fpsBtn.textContent !== txt) fpsBtn.textContent = txt;
+  function updateFpsLabel() {
+    var txt = 'FPS: ' + (fpsNow || '…') + ' / лимит ' + fpsCap;
+    if (fpsLabel.textContent !== txt) fpsLabel.textContent = txt;
   }
 
-  function toggleFps() {
-    fpsCap = fpsCap === 60 ? 30 : 60;
+  fpsInput.min = FPS_MIN; fpsInput.max = FPS_MAX; fpsInput.step = 1; fpsInput.value = fpsCap;
+  fpsInput.addEventListener('input', function () {
+    fpsCap = Math.max(FPS_MIN, Math.min(FPS_MAX, parseInt(fpsInput.value, 10) || 60));
     try { localStorage.setItem('lowplat.fps', String(fpsCap)); } catch (e) {}
-    fpsCount = 0; fpsStamp = 0; fpsNow = 0;
-    updateFpsBtn();
-  }
-
-  fpsBtn.addEventListener('click', function () { toggleFps(); fpsBtn.blur(); }); // blur: чтобы пробел не нажимал кнопку
+    nextRender = 0; fpsCount = 0; fpsStamp = 0; fpsNow = 0;
+    updateFpsLabel();
+  });
+  // после выбора снимаем фокус, чтобы стрелки и пробел управляли игрой, а не ползунком
+  fpsInput.addEventListener('change', function () { fpsInput.blur(); });
+  fpsInput.addEventListener('pointerup', function () { fpsInput.blur(); });
 
   // ---------- цикл ----------
   var STEP = 1000 / 60, acc = 0, last = 0, raf = 0;
+  var MAX_TICKS = 15;     // больше тактов за кадр не догоняем (кадр реже ~4 раз в секунду - игра замедлится, а не зависнет)
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
     if (!last) last = now;
     var dt = now - last;
     last = now;
-    if (dt > 100) dt = 100;
+    if (dt > 250) dt = 250;
     acc += dt;
     var n = 0;
-    while (acc >= STEP && n < 4) { tick(); acc -= STEP; n++; }
-    if (n === 4) acc = 0;
-    if (n > 0) ticked = true;
-    if (ticked && now - lastRender >= 1000 / fpsCap - 4) {  // 4 мс запас на дрожание кадров
-      lastRender = now; ticked = false;
-      render(); updateHud();
+    while (acc >= STEP && n < MAX_TICKS) { tick(); acc -= STEP; n++; }
+    if (n === MAX_TICKS) acc = 0;
+    if (now + 1 >= nextRender) {            // 1 мс запас на дрожание кадров
+      var interval = 1000 / fpsCap;
+      nextRender += interval;
+      if (nextRender < now) nextRender = now + interval;
+      render(acc / STEP);
       fpsCount++;
     }
     if (!fpsStamp) fpsStamp = now;
     else if (now - fpsStamp >= 1000) {
       fpsNow = Math.round(fpsCount * 1000 / (now - fpsStamp));
       fpsCount = 0; fpsStamp = now;
-      updateFpsBtn();
+      updateFpsLabel(); updateHud();
     }
   }
 
   function start() { if (!raf) { last = 0; raf = requestAnimationFrame(frame); } }
-  function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } keys = {}; }
+  function stop() { if (raf) { cancelAnimationFrame(raf); raf = 0; } keys = {}; latch = 0; }
   document.addEventListener('visibilitychange', function () { if (document.hidden) stop(); else start(); });
 
   var saved = 0;
   try { saved = parseInt(localStorage.getItem('lowplat.level'), 10) || 0; } catch (e) {}
   loadLevel(saved);
-  updateFpsBtn();
+  updateFpsLabel();
   start();
 })();
