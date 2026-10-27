@@ -1,0 +1,22 @@
+name: Проверка уровней
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  levels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Все уровни проходимы
+        run: node tools/solve.js
+      - name: Единый файл собран из актуальных исходников
+        run: |
+          node tools/build.js
+          git diff --exit-code -- dist || { echo "dist/low-plat.html устарел: запусти node tools/build.js и закоммить"; exit 1; }
