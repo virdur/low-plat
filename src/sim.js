@@ -69,20 +69,20 @@
 
   function newState() {
     return { x: 0, y: 0, vx: 0, vy: 0, g: false, jh: false, buf: 0, coyote: 0,
-             wallT: 0, wallSide: 0, grip: 0, jt: 0, jb: 0, jx: 0, dead: false, won: false };
+             wallT: 0, wallSide: 0, grip: 0, jt: 0, jb: 0, jx: 0, ev: 0, dead: false, won: false };
   }
 
   function reset(s, lv) {
     s.x = lv.sx; s.y = lv.sy; s.vx = 0; s.vy = 0;
     s.g = false; s.jh = false; s.buf = 0; s.coyote = 0;
-    s.wallT = 0; s.wallSide = 0; s.grip = 0; s.jt = 0; s.jb = 0; s.jx = 0;
+    s.wallT = 0; s.wallSide = 0; s.grip = 0; s.jt = 0; s.jb = 0; s.jx = 0; s.ev = 0;
     s.dead = false; s.won = false;
   }
 
   function copyState(a, b) {
     b.x = a.x; b.y = a.y; b.vx = a.vx; b.vy = a.vy; b.g = a.g; b.jh = a.jh;
     b.buf = a.buf; b.coyote = a.coyote; b.wallT = a.wallT; b.wallSide = a.wallSide;
-    b.grip = a.grip; b.jt = a.jt; b.jb = a.jb; b.jx = a.jx; b.dead = a.dead; b.won = a.won;
+    b.grip = a.grip; b.jt = a.jt; b.jb = a.jb; b.jx = a.jx; b.ev = a.ev; b.dead = a.dead; b.won = a.won;
   }
 
   // Бокс (x,y,SIZE) пересекает твёрдый тайл? Всё за краем поля - стена.
@@ -116,8 +116,13 @@
     return v < t ? Math.min(v + a, t) : Math.max(v - a, t);
   }
 
+  // события шага для звука, на физику не влияют: s.ev = EV_JUMP | EV_WALL | EV_LAND
+  var EV_JUMP = 1, EV_WALL = 2, EV_LAND = 4;
+
   // inp: 1 = влево, 2 = вправо, 4 = прыжок (зажат)
   function step(s, lv, inp) {
+    var wasG = s.g;
+    s.ev = 0;
     var dir = ((inp & 2) ? 1 : 0) - ((inp & 1) ? 1 : 0);
     var jh = (inp & 4) !== 0;
 
@@ -153,11 +158,11 @@
     if (s.buf > 0) {
       if (s.coyote > 0) {
         s.vy = -C.jump; s.jt = C.jumpFrames; s.jb = C.jumpBoost; s.jx = 0;
-        s.coyote = 0; s.buf = 0; s.g = false;
+        s.coyote = 0; s.buf = 0; s.g = false; s.ev |= EV_JUMP;
       } else if (s.wallT > 0) {
         s.vy = -C.wallJump; s.jt = C.wallFrames; s.jb = C.wallBoost;
         s.vx = -s.wallSide * C.wallJX; s.jx = -s.wallSide * C.wallBoostX;
-        s.wallT = 0; s.buf = 0; s.grip = 0;
+        s.wallT = 0; s.buf = 0; s.grip = 0; s.ev |= EV_WALL;
       }
     }
     if (s.jt > 0) {
@@ -181,7 +186,7 @@
     var ny = s.y + s.vy;
     s.g = false;
     if (hitsSolid(lv, s.x, ny)) {
-      if (s.vy > 0) { ny = Math.floor((ny + SIZE - 0.001) / T) * T - SIZE; s.g = true; }
+      if (s.vy > 0) { ny = Math.floor((ny + SIZE - 0.001) / T) * T - SIZE; s.g = true; if (!wasG && s.vy > 2.5) s.ev |= EV_LAND; }
       else { ny = (Math.floor(ny / T) + 1) * T; s.jt = 0; }
       s.vy = 0;
     }
@@ -193,6 +198,6 @@
   }
 
   var LP = root.LP = root.LP || {};
-  LP.sim = { T: T, COLS: COLS, ROWS: ROWS, SIZE: SIZE, C: C, EMPTY: EMPTY, SOLID: SOLID, SPIKE: SPIKE,
+  LP.sim = { T: T, COLS: COLS, ROWS: ROWS, SIZE: SIZE, C: C, EMPTY: EMPTY, SOLID: SOLID, SPIKE: SPIKE, EV_JUMP: EV_JUMP, EV_WALL: EV_WALL, EV_LAND: EV_LAND,
              parseLevel: parseLevel, newState: newState, reset: reset, copyState: copyState, step: step };
 })(typeof globalThis !== 'undefined' ? globalThis : window);
